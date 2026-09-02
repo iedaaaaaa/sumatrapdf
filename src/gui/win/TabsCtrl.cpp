@@ -69,9 +69,9 @@ static Color TabTextColorForBackground(Color text, Color tabBg) {
 
 static Color BlendColor(Color base, Color overlay, int overlayPercent) {
     int basePercent = 100 - overlayPercent;
-    return MkRgb((GetRed(base) * basePercent + GetRed(overlay) * overlayPercent) / 100,
-                 (GetGreen(base) * basePercent + GetGreen(overlay) * overlayPercent) / 100,
-                 (GetBlue(base) * basePercent + GetBlue(overlay) * overlayPercent) / 100);
+    return MkRgb(u8((GetRed(base) * basePercent + GetRed(overlay) * overlayPercent) / 100),
+                 u8((GetGreen(base) * basePercent + GetGreen(overlay) * overlayPercent) / 100),
+                 u8((GetBlue(base) * basePercent + GetBlue(overlay) * overlayPercent) / 100));
 }
 
 //--- TabCtrl: one tab
