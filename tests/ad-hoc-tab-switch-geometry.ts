@@ -102,7 +102,7 @@ export async function testit(): Promise<void> {
   });
   const appdata = writeAppdata(
     "ad-hoc-tab-switch-geometry-appdata",
-    "ShowStartPage = false\nShowToc = false\nShowFavorites = false\nShowToolbar = true\nUseTabs = true\n",
+    "ShowStartPage = false\nShowToc = false\nShowFavorites = false\nShowToolbar = true\nUseTabs = true\nNoHomeTab = true\n",
   );
   const { proc, client, frame } = await launchControlled(["-appdata", appdata, paths[0]]);
   try {
