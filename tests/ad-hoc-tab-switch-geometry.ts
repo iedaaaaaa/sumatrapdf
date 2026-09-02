@@ -37,7 +37,7 @@ function pageCount(layout: LayoutInfo): number {
 }
 
 function toolbarRect(raw: string, command: number): LayoutRect {
-  const pattern = `^idx=\\d+ cmd=${command} hidden=0 rect=(-?\\d+),(-?\\d+),(-?\\d+),(-?\\d+)$`;
+  const pattern = `^idx=\\d+ cmd=${command} hidden=0 rect=(-?\\d+),(-?\\d+),(-?\\d+),(-?\\d+)`;
   const match = new RegExp(pattern, "m").exec(raw);
   if (!match) {
     throw new Error(`tab-switch-geometry: toolbar command ${command} missing in:\n${raw}`);
