@@ -341,13 +341,16 @@ void TabsSelect(MainWindow* win, int tabIndex) {
 
     // same work as in onSelectionChanging and onSelectionChanged
     SaveCurrentWindowTab(win);
-    int prevIdx = tabsCtrl->SetSelected(tabIndex);
+    int prevIdx = tabsCtrl->SetSelected(tabIndex, TabSelectionRepaint::Deferred);
     if (prevIdx < 0) {
         return;
     }
     WindowTab* tab = tabs[tabIndex];
     // page-info tip is restored via MainWindow::pageInfoWanted in LoadModelIntoTab
     LoadModelIntoTab(tab);
+    if (IsMainWindowValidAndNotClosing(win) && tabsCtrl->hwnd) {
+        HwndRepaintNow(tabsCtrl->hwnd);
+    }
 }
 
 // clang-format off

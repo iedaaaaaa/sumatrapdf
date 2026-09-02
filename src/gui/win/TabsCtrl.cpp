@@ -773,7 +773,7 @@ void TabsCtrl::OnTabMouseDown(TabCtrl* tab, VirtMouseEvent& ev) {
         if (TriggerSelectionChanging(this)) {
             return;
         }
-        SetSelected(idx);
+        SetSelected(idx, TabSelectionRepaint::Deferred);
         TriggerSelectionChanged(this);
         // LoadModelIntoTab() can pump messages; ensure tabs are fully painted.
         HwndRepaintNow(hwnd);
@@ -1246,7 +1246,7 @@ int TabsCtrl::GetSelected() {
     return selectedIdx;
 }
 
-int TabsCtrl::SetSelected(int idx) {
+int TabsCtrl::SetSelected(int idx, TabSelectionRepaint repaint) {
     int nTabs = TabCount();
     if (idx < 0 || idx >= nTabs) {
         logf("TabsCtrl::SetSelected(): idx: %d, TabsCount(): %d\n", idx, nTabs);
@@ -1255,7 +1255,9 @@ int TabsCtrl::SetSelected(int idx) {
     int prevSelectedIdx = selectedIdx;
     selectedIdx = idx;
     UpdateHover(tabHighlighted);
-    HwndRepaintNow(hwnd);
+    if (repaint == TabSelectionRepaint::Immediate) {
+        HwndRepaintNow(hwnd);
+    }
     return prevSelectedIdx;
 }
 

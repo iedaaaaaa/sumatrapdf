@@ -34,6 +34,8 @@ struct TabInfo {
     ~TabInfo();
 };
 
+enum class TabSelectionRepaint : u8 { Deferred, Immediate };
+
 // Tab bar as a virtual control: owns TabCtrl children, paints and hit-tests
 // them via VirtRoot on a host HWND that the frame positions.
 struct TabsCtrl : VirtCtrl {
@@ -170,7 +172,7 @@ struct TabsCtrl : VirtCtrl {
     void RemoveAllTabs();
 
     int GetSelected();
-    int SetSelected(int idx);
+    int SetSelected(int idx, TabSelectionRepaint repaint = TabSelectionRepaint::Immediate);
     bool IsValidIdx(int idx);
 
     void SetHighlighted(int idx);
