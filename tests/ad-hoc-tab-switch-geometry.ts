@@ -66,8 +66,22 @@ async function snapshot(client: ControlClient) {
     relayouts: layout.count,
     frame: item(layout, "frame"),
     canvas: item(layout, "canvas"),
+    toolbarWindow: item(layout, "toolbar"),
     tabs: item(layout, "tabs"),
     previousPage: toolbarRect(toolbar, cmdId("CmdGoToPrevPage")),
+  };
+}
+
+async function snapshotHome(client: ControlClient) {
+  const layout = await client.layout();
+  if (pageCountOrUnknown(layout) >= 0) {
+    throw new Error(`tab-switch-geometry: expected Home without a document:\n${layout.raw}`);
+  }
+  return {
+    frame: item(layout, "frame"),
+    canvas: item(layout, "canvas"),
+    toolbarWindow: item(layout, "toolbar"),
+    tabs: item(layout, "tabs"),
   };
 }
 
@@ -91,6 +105,21 @@ async function switchTab(client: ControlClient, frame: number, command: number, 
   return snapshot(client);
 }
 
+async function switchHome(client: ControlClient, frame: number, command: number) {
+  await client.layout("reset");
+  sendCommandSync(frame, command);
+  const deadline = Date.now() + 15000;
+  let layout = await client.layout();
+  while (pageCountOrUnknown(layout) >= 0 && Date.now() < deadline) {
+    await sleep(50);
+    layout = await client.layout();
+  }
+  if (pageCountOrUnknown(layout) >= 0) {
+    throw new Error(`tab-switch-geometry: did not reach Home:\n${layout.raw}`);
+  }
+  return snapshotHome(client);
+}
+
 export async function testit(): Promise<void> {
   const dir = tmpPath("ad-hoc-tab-switch-geometry");
   rmSync(dir, { recursive: true, force: true });
@@ -102,7 +131,7 @@ export async function testit(): Promise<void> {
   });
   const appdata = writeAppdata(
     "ad-hoc-tab-switch-geometry-appdata",
-    "ShowStartPage = false\nShowToc = false\nShowFavorites = false\nShowToolbar = true\nUseTabs = true\nNoHomeTab = true\n",
+    "ShowStartPage = false\nShowToc = false\nShowFavorites = false\nShowToolbar = true\nUseTabs = true\n",
   );
   const { proc, client, frame } = await launchControlled(["-appdata", appdata, paths[0]]);
   try {
@@ -124,7 +153,6 @@ export async function testit(): Promise<void> {
       [prevTab, 7],
       [nextTab, 38],
       [nextTab, 1234],
-      [nextTab, 7],
     ] as const) {
       const current = await switchTab(client, frame, command, wantPages);
       if (current.pages !== wantPages) {
@@ -133,6 +161,7 @@ export async function testit(): Promise<void> {
       for (const [name, a, b] of [
         ["frame", baseline.frame, current.frame],
         ["canvas", baseline.canvas, current.canvas],
+        ["toolbar-window", baseline.toolbarWindow, current.toolbarWindow],
         ["tabs", baseline.tabs, current.tabs],
         ["previous-page", baseline.previousPage, current.previousPage],
       ] as const) {
@@ -145,6 +174,66 @@ export async function testit(): Promise<void> {
       }
       if (current.pages !== 7 && current.pages !== 38 && current.pages !== 1234) {
         throw new Error(`tab-switch-geometry: unexpected page count ${current.pages}`);
+      }
+    }
+
+    const homeBaseline = await switchHome(client, frame, nextTab);
+    for (const [name, a, b] of [
+      ["frame", baseline.frame, homeBaseline.frame],
+      ["canvas", baseline.canvas, homeBaseline.canvas],
+      ["toolbar-window", baseline.toolbarWindow, homeBaseline.toolbarWindow],
+      ["tabs", baseline.tabs, homeBaseline.tabs],
+    ] as const) {
+      if (!sameRect(a, b)) {
+        throw new Error(
+          `tab-switch-geometry: ${name} moved on Home ` +
+            `(baseline=${JSON.stringify(a)} current=${JSON.stringify(b)})`,
+        );
+      }
+    }
+
+    const fromHome = await switchTab(client, frame, nextTab, 7);
+    for (const [name, a, b] of [
+      ["frame", baseline.frame, fromHome.frame],
+      ["canvas", baseline.canvas, fromHome.canvas],
+      ["toolbar-window", baseline.toolbarWindow, fromHome.toolbarWindow],
+      ["tabs", baseline.tabs, fromHome.tabs],
+    ] as const) {
+      if (!sameRect(a, b)) {
+        throw new Error(
+          `tab-switch-geometry: ${name} moved after Home ` +
+            `(baseline=${JSON.stringify(a)} current=${JSON.stringify(b)})`,
+        );
+      }
+    }
+
+    const homeAgain = await switchHome(client, frame, prevTab);
+    for (const [name, a, b] of [
+      ["frame", homeBaseline.frame, homeAgain.frame],
+      ["canvas", homeBaseline.canvas, homeAgain.canvas],
+      ["toolbar-window", homeBaseline.toolbarWindow, homeAgain.toolbarWindow],
+      ["tabs", homeBaseline.tabs, homeAgain.tabs],
+    ] as const) {
+      if (!sameRect(a, b)) {
+        throw new Error(
+          `tab-switch-geometry: ${name} moved on repeated Home ` +
+            `(baseline=${JSON.stringify(a)} current=${JSON.stringify(b)})`,
+        );
+      }
+    }
+
+    const backToDocument = await switchTab(client, frame, prevTab, 1234);
+    for (const [name, a, b] of [
+      ["frame", baseline.frame, backToDocument.frame],
+      ["canvas", baseline.canvas, backToDocument.canvas],
+      ["toolbar-window", baseline.toolbarWindow, backToDocument.toolbarWindow],
+      ["tabs", baseline.tabs, backToDocument.tabs],
+    ] as const) {
+      if (!sameRect(a, b)) {
+        throw new Error(
+          `tab-switch-geometry: ${name} moved after returning from Home ` +
+            `(baseline=${JSON.stringify(a)} current=${JSON.stringify(b)})`,
+        );
       }
     }
   } finally {
