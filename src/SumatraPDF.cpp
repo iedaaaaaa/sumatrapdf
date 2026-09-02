@@ -4740,8 +4740,6 @@ void LoadModelIntoTab(WindowTab* tab) {
     if (prevDm && win->isFullScreen && !win->InPresentation()) {
         prevDm->ApplyFullscreenDisplayMode(false);
     }
-    bool wasNonDocumentTab = win->CurrentTab() && win->CurrentTab()->IsNonDocumentTab();
-    bool isNonDocumentTab = tab->IsNonDocumentTab();
     CloseDocumentInCurrentTab(win, true, false);
 
     win->currentTabTemp = tab;
@@ -4805,23 +4803,16 @@ void LoadModelIntoTab(WindowTab* tab) {
     UpdateUiForCurrentTab(win);
     PickAnotherRandomPromotion();
 
-    bool wasTocVisible = win->uiState.tocVisible;
-    bool wasFavoritesVisible = win->uiState.favVisible;
     if (win->InPresentation()) {
         SetSidebarVisibility(win, tab->showTocPresentation, gSettings->showFavorites, SidebarResizeFrame::Keep,
                              SidebarUiUpdate::Skip);
     } else {
-        SetSidebarVisibility(win, tab->showToc, gSettings->showFavorites, SidebarResizeFrame::Keep, SidebarUiUpdate::Skip);
+        SetSidebarVisibility(win, tab->showToc, gSettings->showFavorites, SidebarResizeFrame::Keep,
+                             SidebarUiUpdate::Skip);
     }
-    bool sidebarChanged = wasTocVisible != win->uiState.tocVisible || wasFavoritesVisible != win->uiState.favVisible;
-
-    // Restore canvas size/visibility at a document/non-document boundary.
-    if (wasNonDocumentTab || isNonDocumentTab) {
-        win->uiState.layout = {};
-    }
-    if (wasNonDocumentTab || isNonDocumentTab || sidebarChanged) {
-        RelayoutFrame(win, true, -1);
-    }
+    // RelayoutFrame compares the cached state, so unchanged chrome keeps its
+    // existing HWND origins while tab-specific layout changes are applied.
+    RelayoutFrame(win, true, -1);
 
     // show the webview only now, when the toolbar/sidebar layout is final:
     // showing it earlier (at the previous tab's canvas geometry) made it
