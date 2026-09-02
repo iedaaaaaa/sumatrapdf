@@ -129,7 +129,10 @@ export async function testit(): Promise<void> {
         ["previous-page", baseline.previousPage, current.previousPage],
       ] as const) {
         if (!sameRect(a, b)) {
-          throw new Error(`tab-switch-geometry: ${name} moved on ${wantPages}-page tab`);
+          throw new Error(
+            `tab-switch-geometry: ${name} moved on ${wantPages}-page tab ` +
+              `(baseline=${JSON.stringify(a)} current=${JSON.stringify(b)})`,
+          );
         }
       }
       if (current.pages !== 7 && current.pages !== 38 && current.pages !== 1234) {
