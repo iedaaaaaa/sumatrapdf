@@ -148,10 +148,10 @@ constexpr int kMaxCustomButtons = 127;
 static ToolbarButtonInfo gCustomButtons[kMaxCustomButtons + 1];
 static int gCustomButtonsCount = 0;
 
-// Light theme ControlBackgroundColor is white, which is what the old themed
-// rebar/toolbar painted. Other themes use their control background.
+// Keep the toolbar on the same surface as the selected default tab. The tab
+// background uses the same theme color with this accent.
 static Color TbBgColor() {
-    return ThemeControlBackgroundColor();
+    return AccentColor(ThemeControlBackgroundColor(), kTabSelectedAccent);
 }
 
 Color TbTextColor() {

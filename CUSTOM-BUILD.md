@@ -16,6 +16,8 @@ The build is performed only by GitHub-hosted Actions. It does not use the upstre
 ## UI changes
 
 - Default tabs use the tab-strip color for inactive tabs, a subtle hover accent, and a stronger selected-tab accent.
+- The toolbar uses the same selected default-tab surface color.
+- Every closable tab keeps its close button visible while retaining the existing hit area and hover behavior.
 - User-selected tab colors retain their existing selected and shaded inactive/hover behavior.
 - A low-contrast, DPI-scaled separator is drawn only between visually adjacent inactive tabs, including correct RTL ordering.
 - The drag image uses the same selected-tab background calculation as normal painting.

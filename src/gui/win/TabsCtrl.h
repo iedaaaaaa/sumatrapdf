@@ -7,6 +7,7 @@
 // prerequisites).
 
 constexpr int kTabMinDx = 100;
+constexpr int kTabSelectedAccent = 24;
 
 struct TabsCtrl;
 struct TabInfo;

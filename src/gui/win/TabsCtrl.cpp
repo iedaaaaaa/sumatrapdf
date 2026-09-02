@@ -40,7 +40,6 @@ using Gdiplus::UnitPixel;
 
 static const WStr kTabsCtrlClassName = L"SumatraTabsCtrlClass";
 constexpr int kTabHoverAccent = 12;
-constexpr int kTabSelectedAccent = 24;
 constexpr int kTabSeparatorInset = 7;
 
 // hwnd is kept LTR (like the canvas); UI direction comes from the parent frame
@@ -220,10 +219,9 @@ void TabCtrl::SetBounds(Rect r) {
     closeBtn->SetBounds(hit);
 }
 
-// like Chrome: only the selected tab shows (and hit-tests) its ✕, so a click
-// on a non-selected tab always selects it and can't accidentally close it
+// every closable tab keeps its ✕ visible and hit-testable
 bool TabCtrl::CloseVisible() {
-    return ti->canClose && IsSelected();
+    return ti->canClose;
 }
 
 void TabCtrl::Paint(VirtPaintCtx& ctx) {
