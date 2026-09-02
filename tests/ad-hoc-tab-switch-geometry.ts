@@ -162,7 +162,6 @@ function sameToolbarGeometry(a: ChromeSnapshot, b: ChromeSnapshot): boolean {
     (button, i) =>
       button.idx === bb[i].idx &&
       button.cmd === bb[i].cmd &&
-      button.hidden === bb[i].hidden &&
       sameRect(button.rect, bb[i].rect),
   );
 }
