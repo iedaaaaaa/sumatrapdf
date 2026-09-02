@@ -3087,8 +3087,22 @@ static void UpdateToolbarSidebarText(MainWindow* win) {
     win->favLabel->Invalidate();
 }
 
-static Color DwmFrameBorderColorForCurrentTheme() {
-    return IsCurrentThemeDefault() ? (Color)DWMWA_COLOR_DEFAULT : ThemeControlBackgroundColor();
+static Color BlendColor(Color base, Color overlay, int overlayPercent) {
+    int basePercent = 100 - overlayPercent;
+    return MkRgb((GetRed(base) * basePercent + GetRed(overlay) * overlayPercent) / 100,
+                 (GetGreen(base) * basePercent + GetGreen(overlay) * overlayPercent) / 100,
+                 (GetBlue(base) * basePercent + GetBlue(overlay) * overlayPercent) / 100);
+}
+
+static Color DwmFrameBorderColorForCurrentTheme(MainWindow* win) {
+    if (IsCurrentThemeDefault()) {
+        return (Color)DWMWA_COLOR_DEFAULT;
+    }
+    Color background = ThemeControlBackgroundColor();
+    if (IsLightColor(background) || !win || win->captionBtn[CB_CLOSE].inactive) {
+        return background;
+    }
+    return BlendColor(background, ThemeEdgeColor(), 25);
 }
 
 // Win11 DWM attributes; ignored (HRESULT failure) on older Windows.
@@ -3113,7 +3127,7 @@ static void UpdateWindowFrameBorderColor(MainWindow* win) {
         SetWindowBorderColor(win->hwndFrame, (Color)DWMWA_COLOR_NONE);
         return;
     }
-    SetWindowBorderColor(win->hwndFrame, DwmFrameBorderColorForCurrentTheme());
+    SetWindowBorderColor(win->hwndFrame, DwmFrameBorderColorForCurrentTheme(win));
 }
 
 static void OnDpiChanged(MainWindow* win, RECT* suggested, int explicitDpi = 0, bool force = false);
@@ -13551,6 +13565,7 @@ static LRESULT CustomCaptionFrameProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
             for (int i = CB_BTN_FIRST; i < CB_BTN_COUNT; i++) {
                 win->captionBtn[i].inactive = wp == FALSE;
             }
+            UpdateWindowFrameBorderColor(win);
             if (!IsIconic(hwnd)) {
                 RECT rc = ToRECT(win->captionRect);
                 if (IsCurrentThemeDefault()) {

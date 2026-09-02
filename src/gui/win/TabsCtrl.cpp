@@ -39,6 +39,9 @@ using Gdiplus::TextRenderingHintClearTypeGridFit;
 using Gdiplus::UnitPixel;
 
 static const WStr kTabsCtrlClassName = L"SumatraTabsCtrlClass";
+constexpr int kTabHoverAccent = 12;
+constexpr int kTabSelectedAccent = 24;
+constexpr int kTabSeparatorInset = 7;
 
 // hwnd is kept LTR (like the canvas); UI direction comes from the parent frame
 static bool IsTabsRtl(HWND hwnd) {
@@ -64,6 +67,13 @@ static Color TabTextColorForBackground(Color text, Color tabBg) {
     return IsLightColor(tabBg) ? kColBlack : kColWhite;
 }
 
+static Color BlendColor(Color base, Color overlay, int overlayPercent) {
+    int basePercent = 100 - overlayPercent;
+    return MkRgb((GetRed(base) * basePercent + GetRed(overlay) * overlayPercent) / 100,
+                 (GetGreen(base) * basePercent + GetGreen(overlay) * overlayPercent) / 100,
+                 (GetBlue(base) * basePercent + GetBlue(overlay) * overlayPercent) / 100);
+}
+
 //--- TabCtrl: one tab
 
 // paints the tab (background, title, dirty dot) and hosts its ✕. It doesn't own
@@ -83,6 +93,7 @@ struct TabCtrl : VirtCtrl {
     bool IsSelected();
     bool IsUnderMouse();
     bool CloseVisible();
+    Color SelectedBgColor();
     Color BgColor();
 
     Size GetIdealSize() override;
@@ -127,8 +138,14 @@ bool TabCtrl::IsUnderMouse() {
     return tabsCtrl && tabsCtrl->tabHighlighted == Idx();
 }
 
+Color TabCtrl::SelectedBgColor() {
+    if (!IsSpecialColor(ti->tabColor)) {
+        return ti->tabColor;
+    }
+    return AccentColor(GetColor(kColTabBg), kTabSelectedAccent);
+}
+
 Color TabCtrl::BgColor() {
-    Color selected = GetColor(kColTabBg);
     bool isSelected = IsSelected();
     bool isUnderMouse = IsUnderMouse();
     // a tab with a color of its own keeps it, shaded when it isn't selected
@@ -139,9 +156,10 @@ Color TabCtrl::BgColor() {
         return AccentColor(ti->tabColor, isUnderMouse ? 35 : 25);
     }
     if (isSelected) {
-        return selected;
+        return SelectedBgColor();
     }
-    return AccentColor(selected, isUnderMouse ? 35 : 25);
+    Color inactive = GetColor(kColTabBg);
+    return isUnderMouse ? AccentColor(inactive, kTabHoverAccent) : inactive;
 }
 
 Size TabCtrl::GetIdealSize() {
@@ -223,6 +241,16 @@ void TabCtrl::Paint(VirtPaintCtx& ctx) {
     gfx->FillRect(r, tabBgCol);
 
     bool isRtl = IsTabsRtl(hwnd);
+    int idx = Idx();
+    int visualLeftIdx = isRtl ? idx + 1 : idx - 1;
+    TabCtrl* visualLeft = tabsCtrl->TabCtrlAt(visualLeftIdx);
+    if (!IsSelected() && visualLeft && !visualLeft->IsSelected()) {
+        int inset = DpiScale(kTabSeparatorInset);
+        int separatorDy = std::max(0, r.dy - (2 * inset));
+        Color separator = BlendColor(GetColor(kColTabBg), gColsLine[kColLineFg], 50);
+        gfx->FillRect({r.x, r.y + inset, DpiScale(1), separatorDy}, separator);
+    }
+
     PlatformFont* font = tabsCtrl->GetFont();
 
     // draw text — inset from the close glyph (size varies with tab height),
@@ -565,7 +593,7 @@ HBITMAP TabsCtrl::RenderForDragging(int idx) {
     sfPage.SetTrimming(Gdiplus::StringTrimmingNone);
 
     // the drag image is the tab as it looks while selected
-    Color bgCol = GetColor(kColTabBg);
+    Color bgCol = tw->SelectedBgColor();
     Color textCol = TabTextColorForBackground(GetColor(kColTabText), bgCol);
 
     SolidBrush br(GdipCol(bgCol));
