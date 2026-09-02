@@ -10,6 +10,7 @@ This checkout is the SumatraPDF Explorer-style custom-build project. These rules
 - Use the x64 Release artifact from that workflow for executable testing. Do not create a local replacement build.
 - Do not replace the installed SumatraPDF, change file associations, modify the registry, or bypass Defender, SmartScreen, AppLocker, or WDAC.
 - Push only to the public fork configured as `origin`. Never push to `upstream` and never create an upstream pull request.
+- The user explicitly requires that no push or pull request be sent to the upstream repository; treat this as a hard user instruction.
 - Keep the custom workflow manual-only. Do not add `push`, `pull_request`, or `schedule` triggers.
 - Do not upload PDFs, settings, session data, local paths, tokens, credentials, logs containing local environment information, or other machine-specific data.
 - Before any commit, inspect `git diff --check`, `git status`, `git diff`, and `git diff --cached`; reject unrelated or sensitive files.
