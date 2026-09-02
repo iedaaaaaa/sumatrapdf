@@ -29,9 +29,17 @@ function item(layout: LayoutInfo, name: string): LayoutRect {
 }
 
 function pageCount(layout: LayoutInfo): number {
+  const count = pageCountOrUnknown(layout);
+  if (count >= 0) {
+    return count;
+  }
+  throw new Error(`tab-switch-geometry: page count missing in:\n${layout.raw}`);
+}
+
+function pageCountOrUnknown(layout: LayoutInfo): number {
   const match = /pages count=(\d+)/.exec(layout.raw);
   if (!match) {
-    throw new Error(`tab-switch-geometry: page count missing in:\n${layout.raw}`);
+    return -1;
   }
   return Number(match[1]);
 }
@@ -72,11 +80,11 @@ async function switchTab(client: ControlClient, frame: number, command: number, 
   sendCommandSync(frame, command);
   const deadline = Date.now() + 15000;
   let layout = await client.layout();
-  while (pageCount(layout) !== wantPages && Date.now() < deadline) {
+  while (pageCountOrUnknown(layout) !== wantPages && Date.now() < deadline) {
     await sleep(50);
     layout = await client.layout();
   }
-  if (pageCount(layout) !== wantPages) {
+  if (pageCountOrUnknown(layout) !== wantPages) {
     throw new Error(`tab-switch-geometry: did not reach ${wantPages} pages:\n${layout.raw}`);
   }
   await client.waitForRenderIdle();
