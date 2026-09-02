@@ -4808,11 +4808,10 @@ void LoadModelIntoTab(WindowTab* tab) {
     bool wasTocVisible = win->uiState.tocVisible;
     bool wasFavoritesVisible = win->uiState.favVisible;
     if (win->InPresentation()) {
-        SetSidebarVisibility(win, tab->showTocPresentation, gSettings->showFavorites);
+        SetSidebarVisibility(win, tab->showTocPresentation, gSettings->showFavorites, SidebarResizeFrame::Keep,
+                             SidebarUiUpdate::Skip);
     } else {
-        SidebarUiUpdate update = (wasNonDocumentTab || isNonDocumentTab) ? SidebarUiUpdate::Schedule
-                                                                          : SidebarUiUpdate::Skip;
-        SetSidebarVisibility(win, tab->showToc, gSettings->showFavorites, SidebarResizeFrame::Keep, update);
+        SetSidebarVisibility(win, tab->showToc, gSettings->showFavorites, SidebarResizeFrame::Keep, SidebarUiUpdate::Skip);
     }
     bool sidebarChanged = wasTocVisible != win->uiState.tocVisible || wasFavoritesVisible != win->uiState.favVisible;
 
