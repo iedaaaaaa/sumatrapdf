@@ -1,0 +1,75 @@
+name: Build Custom SumatraPDF
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build x64 Release
+    runs-on: windows-2025-vs2026
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      - name: Build
+        run: bun .\cmd\build.ts -release -clean
+
+      - name: Prepare artifact
+        id: metadata
+        shell: pwsh
+        env:
+          UPSTREAM_BASE_SHA: a22bb169e0da99b93fae4f2529de22e62ce0aeef
+        run: |
+          $ErrorActionPreference = "Stop"
+          $base = $env:UPSTREAM_BASE_SHA
+          $exe = Join-Path $env:GITHUB_WORKSPACE "out\rel64\SumatraPDF.exe"
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+            throw "Expected executable was not created: out\rel64\SumatraPDF.exe"
+          }
+          $file = Get-Item -LiteralPath $exe
+          if ($file.Length -le 0) {
+            throw "The generated executable is empty"
+          }
+          $customSha = git rev-parse HEAD
+          git cat-file -e "$base^{commit}"
+          $shortSha = git rev-parse --short=12 HEAD
+          $artifactDir = Join-Path $env:GITHUB_WORKSPACE "artifact"
+          New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null
+          Copy-Item -LiteralPath $exe -Destination (Join-Path $artifactDir "SumatraPDF.exe")
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+          Set-Content -LiteralPath (Join-Path $artifactDir "SHA256SUMS.txt") -Value "$hash  SumatraPDF.exe" -Encoding ascii
+          $patch = Join-Path $artifactDir "PATCH.txt"
+          git diff --binary "$base" "$customSha" -- . | Set-Content -LiteralPath $patch -Encoding utf8NoBOM
+          $version = $file.VersionInfo.FileVersion
+          $buildUtc = (Get-Date).ToUniversalTime().ToString("o")
+          @(
+            "upstream repository: https://github.com/sumatrapdfreader/sumatrapdf"
+            "upstream base commit: $base"
+            "custom fork commit: $customSha"
+            "build datetime UTC: $buildUtc"
+            "runner image: windows-2025-vs2026"
+            "build command: bun .\cmd\build.ts -release -clean"
+            "executable: SumatraPDF.exe"
+            "executable size bytes: $($file.Length)"
+            "executable SHA-256: $hash"
+            "file version: $version"
+            "code signing: unsigned custom build"
+          ) | Set-Content -LiteralPath (Join-Path $artifactDir "BUILD-INFO.txt") -Encoding utf8NoBOM
+          "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: SumatraPDF-ExplorerTabs-win64-${{ steps.metadata.outputs.short_sha }}
+          path: artifact
+          retention-days: 3
+          if-no-files-found: error
