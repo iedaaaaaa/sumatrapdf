@@ -4740,6 +4740,11 @@ void LoadModelIntoTab(WindowTab* tab) {
     if (prevDm && win->isFullScreen && !win->InPresentation()) {
         prevDm->ApplyFullscreenDisplayMode(false);
     }
+    bool wasToolbarVisible = win->isToolbarVisible;
+    bool wasToolbarOverlay = win->isToolbarOverlay;
+    bool wereTabsVisible = win->tabsVisible;
+    bool wasTocVisible = win->uiState.tocVisible;
+    bool wasFavoritesVisible = win->uiState.favVisible;
     CloseDocumentInCurrentTab(win, true, false);
 
     win->currentTabTemp = tab;
@@ -4810,9 +4815,13 @@ void LoadModelIntoTab(WindowTab* tab) {
         SetSidebarVisibility(win, tab->showToc, gSettings->showFavorites, SidebarResizeFrame::Keep,
                              SidebarUiUpdate::Skip);
     }
-    // RelayoutFrame compares the cached state, so unchanged chrome keeps its
-    // existing HWND origins while tab-specific layout changes are applied.
-    RelayoutFrame(win, true, -1);
+    bool layoutChanged = wasToolbarVisible != win->isToolbarVisible || wasToolbarOverlay != win->isToolbarOverlay ||
+                         wereTabsVisible != win->tabsVisible || wasTocVisible != win->uiState.tocVisible ||
+                         wasFavoritesVisible != win->uiState.favVisible;
+    // Home and document tabs share the same chrome in the normal tab mode.
+    if (layoutChanged) {
+        RelayoutFrame(win, true, -1);
+    }
 
     // show the webview only now, when the toolbar/sidebar layout is final:
     // showing it earlier (at the previous tab's canvas geometry) made it
