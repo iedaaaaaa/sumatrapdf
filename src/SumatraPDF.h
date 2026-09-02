@@ -189,8 +189,13 @@ enum class SidebarResizeFrame {
     Keep,
     Adjust
 };
+enum class SidebarUiUpdate {
+    Schedule,
+    Skip
+};
 void SetSidebarVisibility(MainWindow* win, bool tocVisible, bool showFavorites,
-                          SidebarResizeFrame = SidebarResizeFrame::Keep);
+                          SidebarResizeFrame = SidebarResizeFrame::Keep,
+                          SidebarUiUpdate = SidebarUiUpdate::Schedule);
 void RememberFavTreeExpansionState(MainWindow* win);
 void AdvanceFocus(MainWindow* win);
 void SetCurrentLanguageAndRefreshUI(Str langCode);

@@ -4808,16 +4808,16 @@ void LoadModelIntoTab(WindowTab* tab) {
     if (win->InPresentation()) {
         SetSidebarVisibility(win, tab->showTocPresentation, gSettings->showFavorites);
     } else {
-        SetSidebarVisibility(win, tab->showToc, gSettings->showFavorites);
+        SidebarUiUpdate update = (wasNonDocumentTab || isNonDocumentTab) ? SidebarUiUpdate::Schedule
+                                                                          : SidebarUiUpdate::Skip;
+        SetSidebarVisibility(win, tab->showToc, gSettings->showFavorites, SidebarResizeFrame::Keep, update);
     }
 
-    // Restore canvas size/visibility immediately when crossing the
-    // document/non-document boundary. Same-kind switches use the queued UI
-    // update from SetSidebarVisibility.
+    // Restore canvas size/visibility at a document/non-document boundary.
     if (wasNonDocumentTab || isNonDocumentTab) {
         win->uiState.layout = {};
-        RelayoutFrame(win, true, -1);
     }
+    RelayoutFrame(win, true, -1);
 
     // show the webview only now, when the toolbar/sidebar layout is final:
     // showing it earlier (at the previous tab's canvas geometry) made it
@@ -9649,7 +9649,8 @@ static void AdjustFrameForSidebar(MainWindow* win, bool show) {
 // Records the desired sidebar visibility in UIState and schedules the
 // deferred update, which shows/hides the sidebar windows and relayouts
 // (see FrameUpdateUi).
-void SetSidebarVisibility(MainWindow* win, bool tocVisible, bool showFavorites, SidebarResizeFrame resizeFrame) {
+void SetSidebarVisibility(MainWindow* win, bool tocVisible, bool showFavorites, SidebarResizeFrame resizeFrame,
+                          SidebarUiUpdate uiUpdate) {
     if (gPluginMode || !CanAccessDisk()) {
         showFavorites = false;
     }
@@ -9706,7 +9707,9 @@ void SetSidebarVisibility(MainWindow* win, bool tocVisible, bool showFavorites, 
     if (resizeFrame == SidebarResizeFrame::Adjust && wasSidebar != nowSidebar) {
         AdjustFrameForSidebar(win, nowSidebar);
     }
-    ScheduleUiUpdate(win, kUiRelayout | kUiNoToolbars | kUiSidebarDirty);
+    if (uiUpdate == SidebarUiUpdate::Schedule) {
+        ScheduleUiUpdate(win, kUiRelayout | kUiNoToolbars | kUiSidebarDirty);
+    }
 }
 
 constexpr const char* kUserLangStr = "${userlang}";
