@@ -1,5 +1,21 @@
 This is a C++ program for Windows, using mostly win32 windows API functions. It is Windows-only: the macOS and Linux ports (`src/mac/`, `src/linux/`, their GUI backends and their CI) were removed.
 
+## Custom build rules
+
+This checkout is the SumatraPDF Explorer-style custom-build project. These rules are mandatory:
+
+- Never install Visual Studio, Visual Studio Build Tools, MSVC, the Windows SDK, Bun, or any other local C++ build toolchain.
+- Never compile locally and never run `bun cmd/build.ts` locally for this project.
+- Compile `SumatraPDF.exe` only through `.github/workflows/custom-sumatra-build.yml` on a GitHub-hosted Windows runner, using its manual `workflow_dispatch` trigger.
+- Use the x64 Release artifact from that workflow for executable testing. Do not create a local replacement build.
+- Do not replace the installed SumatraPDF, change file associations, modify the registry, or bypass Defender, SmartScreen, AppLocker, or WDAC.
+- Push only to the public fork configured as `origin`. Never push to `upstream` and never create an upstream pull request.
+- Keep the custom workflow manual-only. Do not add `push`, `pull_request`, or `schedule` triggers.
+- Do not upload PDFs, settings, session data, local paths, tokens, credentials, logs containing local environment information, or other machine-specific data.
+- Before any commit, inspect `git diff --check`, `git status`, `git diff`, and `git diff --cached`; reject unrelated or sensitive files.
+
+When a local build would normally be suggested by generic build instructions below, these custom build rules take precedence. Explain that the build must be dispatched through GitHub Actions instead.
+
 We don't use STL but our own string / helper / container functions implemented in src\base directory
 
 Assume that Visual Studio command-line tools are available in the PATH environment variable (cl.exe, msbuild.exe etc.)
