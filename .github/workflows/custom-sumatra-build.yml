@@ -23,6 +23,9 @@ jobs:
       - name: Build
         run: bun .\cmd\build.ts -release -clean
 
+      - name: Verify document tab geometry
+        run: bun .\tests\ad-hoc-tab-switch-geometry.ts --no-build -exe .\out\rel64\SumatraPDF.exe
+
       - name: Prepare artifact
         id: metadata
         shell: pwsh

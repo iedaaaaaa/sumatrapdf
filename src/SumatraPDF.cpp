@@ -4740,6 +4740,8 @@ void LoadModelIntoTab(WindowTab* tab) {
     if (prevDm && win->isFullScreen && !win->InPresentation()) {
         prevDm->ApplyFullscreenDisplayMode(false);
     }
+    bool wasNonDocumentTab = win->CurrentTab() && win->CurrentTab()->IsNonDocumentTab();
+    bool isNonDocumentTab = tab->IsNonDocumentTab();
     CloseDocumentInCurrentTab(win, true, false);
 
     win->currentTabTemp = tab;
@@ -4809,9 +4811,11 @@ void LoadModelIntoTab(WindowTab* tab) {
         SetSidebarVisibility(win, tab->showToc, gSettings->showFavorites);
     }
 
-    // Leaving Favorites tab: restore canvas size/visibility before SetViewPortSize
-    // (deferred ScheduleUiUpdate would leave canvas hidden / wrong size).
-    win->uiState.layout = {};
+    // Restore canvas size/visibility when crossing the document/non-document
+    // boundary; same-kind document switches keep the existing frame layout.
+    if (wasNonDocumentTab || isNonDocumentTab) {
+        win->uiState.layout = {};
+    }
     RelayoutFrame(win, true, -1);
 
     // show the webview only now, when the toolbar/sidebar layout is final:

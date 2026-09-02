@@ -1072,6 +1072,40 @@ void UpdateToolbarFindText(MainWindow* win) {
 
 static void UpdateZoomHoverDropdown(MainWindow* win);
 
+struct ToolbarPageTotal : VirtText {
+    int minDx = 0;
+
+    ToolbarPageTotal(Str text, PlatformFont* font) : VirtText(text, font) {}
+
+    Size GetIdealSize() override {
+        Size res = VirtText::GetIdealSize();
+        res.dx = std::max(res.dx, minDx);
+        return res;
+    }
+
+    void SetMinWidth(int dx) {
+        minDx = std::max(minDx, dx);
+    }
+};
+
+static TempStr PageTotalText(DocController* ctrl, int pageCount, int currentPageNo = -1) {
+    if (pageCount <= 0) {
+        return StrL(" ");
+    }
+    if (!ctrl || !ctrl->HasPageLabels()) {
+        return fmt(" / %d", pageCount);
+    }
+
+    if (currentPageNo < 0) {
+        currentPageNo = ctrl->CurrentPageNo();
+    }
+    int logical = ctrl->AsFixed() ? ctrl->AsFixed()->LogicalPageCount() : pageCount;
+    if (logical > 0 && logical != pageCount) {
+        return fmt(" / %d (%d / %d)", logical, currentPageNo, pageCount);
+    }
+    return fmt("%d / %d", currentPageNo, pageCount);
+}
+
 void UpdateToolbarState(MainWindow* win) {
     if (!win->IsDocLoaded()) {
         return;
@@ -1105,27 +1139,32 @@ void UpdateToolbarPageText(MainWindow* win, int pageCount, bool updateOnly) {
     if (tb->pageLabel) {
         tb->pageLabel->SetText(_TRA("Page:"));
     }
-    TempStr txt;
-    if (-1 == pageCount || !pageCount) {
-        txt = StrL(" ");
-    } else if (!win->ctrl || !win->ctrl->HasPageLabels()) {
-        txt = fmt(" / %d", pageCount);
-    } else {
-        int logical = pageCount;
-        DisplayModel* dm = win->ctrl->AsFixed();
-        if (dm) {
-            logical = dm->LogicalPageCount();
-        }
-        if (logical > 0 && logical != pageCount) {
-            txt = fmt(" / %d (%d / %d)", logical, win->ctrl->CurrentPageNo(), pageCount);
-        } else {
-            txt = fmt("%d / %d", win->ctrl->CurrentPageNo(), pageCount);
-        }
-    }
+    TempStr txt = PageTotalText(win->ctrl, pageCount);
     if (updateOnly && tb->pageTotal->s && txt && str::Eq(tb->pageTotal->s, txt)) {
         return;
     }
     tb->pageTotal->SetText(txt);
+
+    // Keep the page indicator wide enough for every loaded document, so a tab
+    // switch changes its text without moving the controls that follow it.
+    auto* pageTotal = static_cast<ToolbarPageTotal*>(tb->pageTotal);
+    int minWidth = pageTotal->GetIdealSize().dx;
+    for (WindowTab* tab : win->Tabs()) {
+        if (!tab || !tab->ctrl) {
+            continue;
+        }
+        TempStr tabText = PageTotalText(tab->ctrl, tab->ctrl->PageCount());
+        Size textSize = PlatformFontMeasureText(pageTotal->font, tabText);
+        int width = textSize.dx + pageTotal->padding.left + pageTotal->padding.right;
+        minWidth = std::max(minWidth, width);
+        if (tab->ctrl->HasPageLabels()) {
+            TempStr lastPageText = PageTotalText(tab->ctrl, tab->ctrl->PageCount(), tab->ctrl->PageCount());
+            textSize = PlatformFontMeasureText(pageTotal->font, lastPageText);
+            width = textSize.dx + pageTotal->padding.left + pageTotal->padding.right;
+            minWidth = std::max(minWidth, width);
+        }
+    }
+    pageTotal->SetMinWidth(minWidth);
     host->Relayout();
     host->Invalidate(true);
 }
@@ -2269,7 +2308,7 @@ static void BuildToolbarLayout(MainWindow* win) {
             win->pageEdit = pageEdit;
             box->AddChild(pageEdit);
 
-            auto* total = new VirtText(StrL(" "), tb->platformFont);
+            auto* total = new ToolbarPageTotal(StrL(" "), tb->platformFont);
             total->isRtl = box->rtl;
             total->SetColor(kColText, fg);
             total->padding = {0, DpiScale(4), 0, pageGap};
