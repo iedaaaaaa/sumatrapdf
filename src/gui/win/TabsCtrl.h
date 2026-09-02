@@ -189,6 +189,8 @@ struct TabsCtrl : VirtCtrl {
     LRESULT WndProc(HWND, UINT, WPARAM, LPARAM);
 };
 
+TempStr TabsGeometryResultTemp(TabsCtrl*, int*);
+
 template <typename T>
 T GetTabsUserData(TabsCtrl* tabs, int idx) {
     TabInfo* tabInfo = tabs->GetTab(idx);

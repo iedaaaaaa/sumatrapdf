@@ -44,80 +44,239 @@ function pageCountOrUnknown(layout: LayoutInfo): number {
   return Number(match[1]);
 }
 
-function toolbarRect(raw: string, command: number): LayoutRect {
-  const pattern = `^idx=\\d+ cmd=${command} hidden=0 rect=(-?\\d+),(-?\\d+),(-?\\d+),(-?\\d+)`;
-  const match = new RegExp(pattern, "m").exec(raw);
-  if (!match) {
-    throw new Error(`tab-switch-geometry: toolbar command ${command} missing in:\n${raw}`);
+type TabGeometry = {
+  selected: boolean;
+  rect: LayoutRect;
+};
+
+type TabsGeometry = {
+  count: number;
+  selected: number;
+  tabWidth: number;
+  tabs: TabGeometry[];
+};
+
+type ToolbarButtonGeometry = {
+  idx: number;
+  cmd: number;
+  hidden: boolean;
+  rect: LayoutRect;
+};
+
+type ChromeSnapshot = {
+  layout: LayoutInfo;
+  frame: LayoutRect;
+  canvas: LayoutRect;
+  toolbarWindow: LayoutRect;
+  tabs: LayoutRect;
+  tabsGeometry: TabsGeometry;
+  toolbarButtons: ToolbarButtonGeometry[];
+};
+
+function parseTabsGeometry(raw: string): TabsGeometry {
+  const header = /^tabs=(\d+) selected=(-?\d+) tabWidth=(-?\d+)$/m.exec(raw);
+  if (!header) {
+    throw new Error(`tab-switch-geometry: invalid tab geometry:\n${raw}`);
+  }
+  const tabs = [...raw.matchAll(/^idx=(\d+) selected=(\d+) rect=(-?\d+),(-?\d+),(-?\d+),(-?\d+)$/gm)].map(
+    (match) => ({
+      selected: Number(match[2]) !== 0,
+      rect: { x: Number(match[3]), y: Number(match[4]), dx: Number(match[5]), dy: Number(match[6]) },
+    }),
+  );
+  if (tabs.length !== Number(header[1])) {
+    throw new Error(`tab-switch-geometry: tab count mismatch:\n${raw}`);
   }
   return {
-    x: Number(match[1]),
-    y: Number(match[2]),
-    dx: Number(match[3]) - Number(match[1]),
-    dy: Number(match[4]) - Number(match[2]),
+    count: Number(header[1]),
+    selected: Number(header[2]),
+    tabWidth: Number(header[3]),
+    tabs,
+  };
+}
+
+function parseToolbarGeometry(raw: string): ToolbarButtonGeometry[] {
+  return [...raw.matchAll(/^idx=(\d+) cmd=(-?\d+) hidden=(\d+) rect=(-?\d+),(-?\d+),(-?\d+),(-?\d+) text=.*$/gm)].map(
+    (match) => ({
+      idx: Number(match[1]),
+      cmd: Number(match[2]),
+      hidden: Number(match[3]) !== 0,
+      rect: {
+        x: Number(match[4]),
+        y: Number(match[5]),
+        dx: Number(match[6]) - Number(match[4]),
+        dy: Number(match[7]) - Number(match[5]),
+      },
+    }),
+  );
+}
+
+async function chromeSnapshot(client: ControlClient): Promise<ChromeSnapshot> {
+  const layout = await client.layout();
+  const toolbarRaw = String((await client.request(ControlCommand.TestToolbarButtons))[1] ?? "");
+  const tabsRaw = String((await client.request(ControlCommand.TestTabsGeometry))[1] ?? "");
+  return {
+    layout,
+    frame: item(layout, "frame"),
+    canvas: item(layout, "canvas"),
+    toolbarWindow: item(layout, "toolbar"),
+    tabs: item(layout, "tabs"),
+    tabsGeometry: parseTabsGeometry(tabsRaw),
+    toolbarButtons: parseToolbarGeometry(toolbarRaw),
   };
 }
 
 async function snapshot(client: ControlClient) {
-  const layout = await client.layout();
-  const toolbar = String((await client.request(ControlCommand.TestToolbarButtons))[1] ?? "");
-  return {
-    pages: pageCount(layout),
-    relayouts: layout.count,
-    frame: item(layout, "frame"),
-    canvas: item(layout, "canvas"),
-    toolbarWindow: item(layout, "toolbar"),
-    tabs: item(layout, "tabs"),
-    previousPage: toolbarRect(toolbar, cmdId("CmdGoToPrevPage")),
-  };
+  const chrome = await chromeSnapshot(client);
+  return { ...chrome, pages: pageCount(chrome.layout), relayouts: chrome.layout.count };
 }
 
 async function snapshotHome(client: ControlClient) {
-  const layout = await client.layout();
-  if (pageCountOrUnknown(layout) >= 0) {
-    throw new Error(`tab-switch-geometry: expected Home without a document:\n${layout.raw}`);
+  const chrome = await chromeSnapshot(client);
+  if (pageCountOrUnknown(chrome.layout) >= 0) {
+    throw new Error(`tab-switch-geometry: expected Home without a document:\n${chrome.layout.raw}`);
   }
-  return {
-    frame: item(layout, "frame"),
-    canvas: item(layout, "canvas"),
-    toolbarWindow: item(layout, "toolbar"),
-    tabs: item(layout, "tabs"),
-  };
+  return chrome;
 }
 
 function sameRect(a: LayoutRect, b: LayoutRect): boolean {
   return a.x === b.x && a.y === b.y && a.dx === b.dx && a.dy === b.dy;
 }
 
+function sameTabsGeometry(a: ChromeSnapshot, b: ChromeSnapshot): boolean {
+  const ag = a.tabsGeometry;
+  const bg = b.tabsGeometry;
+  if (ag.count !== bg.count || ag.tabWidth !== bg.tabWidth || ag.tabs.length !== bg.tabs.length) {
+    return false;
+  }
+  return ag.tabs.every((tab, i) => sameRect(tab.rect, bg.tabs[i].rect));
+}
+
+function sameToolbarGeometry(a: ChromeSnapshot, b: ChromeSnapshot): boolean {
+  const ab = a.toolbarButtons;
+  const bb = b.toolbarButtons;
+  if (ab.length !== bb.length) {
+    return false;
+  }
+  return ab.every(
+    (button, i) =>
+      button.idx === bb[i].idx &&
+      button.cmd === bb[i].cmd &&
+      button.hidden === bb[i].hidden &&
+      sameRect(button.rect, bb[i].rect),
+  );
+}
+
+function sameChromeGeometry(a: ChromeSnapshot, b: ChromeSnapshot): boolean {
+  return (
+    sameRect(a.frame, b.frame) &&
+    sameRect(a.canvas, b.canvas) &&
+    sameRect(a.toolbarWindow, b.toolbarWindow) &&
+    sameRect(a.tabs, b.tabs) &&
+    sameTabsGeometry(a, b) &&
+    sameToolbarGeometry(a, b)
+  );
+}
+
+function geometrySummary(snapshot: ChromeSnapshot): string {
+  return JSON.stringify({
+    frame: snapshot.frame,
+    canvas: snapshot.canvas,
+    toolbar: snapshot.toolbarWindow,
+    tabs: snapshot.tabs,
+    tabItems: snapshot.tabsGeometry.tabs.map((tab) => tab.rect),
+    toolbarItems: snapshot.toolbarButtons.map((button) => ({
+      idx: button.idx,
+      cmd: button.cmd,
+      hidden: button.hidden,
+      rect: button.rect,
+    })),
+  });
+}
+
+function assertTransitionSamples(label: string, samples: ChromeSnapshot[], source: ChromeSnapshot, target: ChromeSnapshot): void {
+  for (const [i, sample] of samples.entries()) {
+    if (sameChromeGeometry(sample, source) || sameChromeGeometry(sample, target)) {
+      continue;
+    }
+    throw new Error(
+      `tab-switch-geometry: transient chrome geometry on ${label} sample=${i}\n` +
+        `current=${geometrySummary(sample)}\nsource=${geometrySummary(source)}\ntarget=${geometrySummary(target)}`,
+    );
+  }
+}
+
+function assertSameChrome(label: string, expected: ChromeSnapshot, current: ChromeSnapshot): void {
+  for (const [name, a, b] of [
+    ["frame", expected.frame, current.frame],
+    ["canvas", expected.canvas, current.canvas],
+    ["toolbar-window", expected.toolbarWindow, current.toolbarWindow],
+    ["tabs", expected.tabs, current.tabs],
+  ] as const) {
+    if (!sameRect(a, b)) {
+      throw new Error(
+        `tab-switch-geometry: ${name} moved ${label} ` +
+          `(baseline=${JSON.stringify(a)} current=${JSON.stringify(b)})`,
+      );
+    }
+  }
+  if (!sameTabsGeometry(expected, current)) {
+    throw new Error(
+      `tab-switch-geometry: tab items moved ${label}\n` +
+        `baseline=${geometrySummary(expected)}\ncurrent=${geometrySummary(current)}`,
+    );
+  }
+  if (!sameToolbarGeometry(expected, current)) {
+    throw new Error(
+      `tab-switch-geometry: toolbar items moved ${label}\n` +
+        `baseline=${geometrySummary(expected)}\ncurrent=${geometrySummary(current)}`,
+    );
+  }
+}
+
 async function switchTab(client: ControlClient, frame: number, command: number, wantPages: number) {
   await client.layout("reset");
   sendCommandSync(frame, command);
   const deadline = Date.now() + 15000;
-  let layout = await client.layout();
+  const samples: ChromeSnapshot[] = [];
+  let chrome = await chromeSnapshot(client);
+  samples.push(chrome);
+  let layout = chrome.layout;
   while (pageCountOrUnknown(layout) !== wantPages && Date.now() < deadline) {
     await sleep(50);
-    layout = await client.layout();
+    chrome = await chromeSnapshot(client);
+    samples.push(chrome);
+    layout = chrome.layout;
   }
   if (pageCountOrUnknown(layout) !== wantPages) {
     throw new Error(`tab-switch-geometry: did not reach ${wantPages} pages:\n${layout.raw}`);
   }
   await client.waitForRenderIdle();
-  return snapshot(client);
+  const current = await snapshot(client);
+  samples.push(current);
+  return { current, samples };
 }
 
 async function switchHome(client: ControlClient, frame: number, command: number) {
   await client.layout("reset");
   sendCommandSync(frame, command);
   const deadline = Date.now() + 15000;
-  let layout = await client.layout();
+  const samples: ChromeSnapshot[] = [];
+  let chrome = await chromeSnapshot(client);
+  samples.push(chrome);
+  let layout = chrome.layout;
   while (pageCountOrUnknown(layout) >= 0 && Date.now() < deadline) {
     await sleep(50);
-    layout = await client.layout();
+    chrome = await chromeSnapshot(client);
+    samples.push(chrome);
+    layout = chrome.layout;
   }
   if (pageCountOrUnknown(layout) >= 0) {
     throw new Error(`tab-switch-geometry: did not reach Home:\n${layout.raw}`);
   }
-  return snapshotHome(client);
+  const current = await snapshotHome(client);
+  samples.push(current);
+  return { current, samples };
 }
 
 export async function testit(): Promise<void> {
@@ -154,88 +313,35 @@ export async function testit(): Promise<void> {
       [nextTab, 38],
       [nextTab, 1234],
     ] as const) {
-      const current = await switchTab(client, frame, command, wantPages);
+      const { current } = await switchTab(client, frame, command, wantPages);
       if (current.pages !== wantPages) {
         throw new Error(`tab-switch-geometry: expected ${wantPages} pages, got ${current.pages}`);
       }
-      for (const [name, a, b] of [
-        ["frame", baseline.frame, current.frame],
-        ["canvas", baseline.canvas, current.canvas],
-        ["toolbar-window", baseline.toolbarWindow, current.toolbarWindow],
-        ["tabs", baseline.tabs, current.tabs],
-        ["previous-page", baseline.previousPage, current.previousPage],
-      ] as const) {
-        if (!sameRect(a, b)) {
-          throw new Error(
-            `tab-switch-geometry: ${name} moved on ${wantPages}-page tab ` +
-              `(baseline=${JSON.stringify(a)} current=${JSON.stringify(b)})`,
-          );
-        }
-      }
+      assertSameChrome(`on ${wantPages}-page tab`, baseline, current);
       if (current.pages !== 7 && current.pages !== 38 && current.pages !== 1234) {
         throw new Error(`tab-switch-geometry: unexpected page count ${current.pages}`);
       }
     }
 
-    const homeBaseline = await switchHome(client, frame, nextTab);
-    for (const [name, a, b] of [
-      ["frame", baseline.frame, homeBaseline.frame],
-      ["canvas", baseline.canvas, homeBaseline.canvas],
-      ["toolbar-window", baseline.toolbarWindow, homeBaseline.toolbarWindow],
-      ["tabs", baseline.tabs, homeBaseline.tabs],
-    ] as const) {
-      if (!sameRect(a, b)) {
-        throw new Error(
-          `tab-switch-geometry: ${name} moved on Home ` +
-            `(baseline=${JSON.stringify(a)} current=${JSON.stringify(b)})`,
-        );
-      }
-    }
+    const homeTransition = await switchHome(client, frame, nextTab);
+    const homeBaseline = homeTransition.current;
+    assertSameChrome("on Home", baseline, homeBaseline);
+    assertTransitionSamples("document to Home", homeTransition.samples, baseline, homeBaseline);
 
-    const fromHome = await switchTab(client, frame, nextTab, 7);
-    for (const [name, a, b] of [
-      ["frame", baseline.frame, fromHome.frame],
-      ["canvas", baseline.canvas, fromHome.canvas],
-      ["toolbar-window", baseline.toolbarWindow, fromHome.toolbarWindow],
-      ["tabs", baseline.tabs, fromHome.tabs],
-    ] as const) {
-      if (!sameRect(a, b)) {
-        throw new Error(
-          `tab-switch-geometry: ${name} moved after Home ` +
-            `(baseline=${JSON.stringify(a)} current=${JSON.stringify(b)})`,
-        );
-      }
-    }
+    const fromHomeTransition = await switchTab(client, frame, nextTab, 7);
+    const fromHome = fromHomeTransition.current;
+    assertSameChrome("after Home", baseline, fromHome);
+    assertTransitionSamples("Home to document", fromHomeTransition.samples, homeBaseline, baseline);
 
-    const homeAgain = await switchHome(client, frame, prevTab);
-    for (const [name, a, b] of [
-      ["frame", homeBaseline.frame, homeAgain.frame],
-      ["canvas", homeBaseline.canvas, homeAgain.canvas],
-      ["toolbar-window", homeBaseline.toolbarWindow, homeAgain.toolbarWindow],
-      ["tabs", homeBaseline.tabs, homeAgain.tabs],
-    ] as const) {
-      if (!sameRect(a, b)) {
-        throw new Error(
-          `tab-switch-geometry: ${name} moved on repeated Home ` +
-            `(baseline=${JSON.stringify(a)} current=${JSON.stringify(b)})`,
-        );
-      }
-    }
+    const homeAgainTransition = await switchHome(client, frame, prevTab);
+    const homeAgain = homeAgainTransition.current;
+    assertSameChrome("on repeated Home", homeBaseline, homeAgain);
+    assertTransitionSamples("document to Home again", homeAgainTransition.samples, baseline, homeBaseline);
 
-    const backToDocument = await switchTab(client, frame, prevTab, 1234);
-    for (const [name, a, b] of [
-      ["frame", baseline.frame, backToDocument.frame],
-      ["canvas", baseline.canvas, backToDocument.canvas],
-      ["toolbar-window", baseline.toolbarWindow, backToDocument.toolbarWindow],
-      ["tabs", baseline.tabs, backToDocument.tabs],
-    ] as const) {
-      if (!sameRect(a, b)) {
-        throw new Error(
-          `tab-switch-geometry: ${name} moved after returning from Home ` +
-            `(baseline=${JSON.stringify(a)} current=${JSON.stringify(b)})`,
-        );
-      }
-    }
+    const backToDocumentTransition = await switchTab(client, frame, prevTab, 1234);
+    const backToDocument = backToDocumentTransition.current;
+    assertSameChrome("after returning from Home", baseline, backToDocument);
+    assertTransitionSamples("Home to document again", backToDocumentTransition.samples, homeBaseline, baseline);
   } finally {
     client.close();
     await killAndWait(proc);

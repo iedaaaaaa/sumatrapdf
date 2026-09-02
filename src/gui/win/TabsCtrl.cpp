@@ -514,6 +514,29 @@ void TabsCtrl::LayoutTabs() {
     }
 }
 
+// Dump tab positions and selection for geometry regression tests.
+TempStr TabsGeometryResultTemp(TabsCtrl* tabs, int* exitCodeOut) {
+    str::Builder out;
+    if (!tabs || !tabs->hwnd) {
+        if (exitCodeOut) {
+            *exitCodeOut = 1;
+        }
+        return StrL("ERROR no-tabs\n");
+    }
+
+    out.Append(fmt("tabs=%d selected=%d tabWidth=%d\n", len(tabs->tabs), tabs->selectedIdx, tabs->tabSize.dx));
+    for (int i = 0; i < len(tabs->tabCtrls); i++) {
+        TabCtrl* tab = tabs->tabCtrls[i];
+        Rect rect = tab ? tab->BoundsInWindow() : Rect{};
+        out.Append(fmt("idx=%d selected=%d rect=%d,%d,%d,%d\n", i, tab && tab->IsSelected() ? 1 : 0, rect.x, rect.y,
+                       rect.dx, rect.dy));
+    }
+    if (exitCodeOut) {
+        *exitCodeOut = 0;
+    }
+    return ToStrTemp(out);
+}
+
 // Finds the index of the tab which contains the given point.
 TabsCtrl::MouseState TabsCtrl::TabStateFromMousePosition(const Point& p) {
     TabsCtrl::MouseState res;

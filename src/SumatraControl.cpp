@@ -781,6 +781,7 @@ enum class ControlCmd : u16 {
     TestFindUiState = 78,
     TestRenderViewPrint = 79,
     TestReadAloudPlaybackBar = 80,
+    TestTabsGeometry = 81,
 };
 
 enum class ControlArgType : u16 {
@@ -1554,6 +1555,14 @@ static void ExecuteControlRequest(ControlRequest* req) {
             Str action = StringArg(req, 0);
             int exitCode = 0;
             Str res = LayoutInfoResultTemp(action, &exitCode);
+            AppendTestResult(req, exitCode, res);
+            break;
+        }
+
+        case ControlCmd::TestTabsGeometry: {
+            int exitCode = 0;
+            MainWindow* win = len(gWindows) > 0 ? gWindows[0] : nullptr;
+            Str res = TabsGeometryResultTemp(win ? win->tabsCtrl : nullptr, &exitCode);
             AppendTestResult(req, exitCode, res);
             break;
         }
