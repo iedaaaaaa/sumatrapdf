@@ -4811,12 +4811,13 @@ void LoadModelIntoTab(WindowTab* tab) {
         SetSidebarVisibility(win, tab->showToc, gSettings->showFavorites);
     }
 
-    // Restore canvas size/visibility when crossing the document/non-document
-    // boundary; same-kind document switches keep the existing frame layout.
+    // Restore canvas size/visibility immediately when crossing the
+    // document/non-document boundary. Same-kind switches use the queued UI
+    // update from SetSidebarVisibility.
     if (wasNonDocumentTab || isNonDocumentTab) {
         win->uiState.layout = {};
+        RelayoutFrame(win, true, -1);
     }
-    RelayoutFrame(win, true, -1);
 
     // show the webview only now, when the toolbar/sidebar layout is final:
     // showing it earlier (at the previous tab's canvas geometry) made it

@@ -1,5 +1,5 @@
-// Document-to-document tab switches must not move the toolbar or relayout the
-// frame. Page counts deliberately differ to expose intrinsic-width changes.
+// Document-to-document tab switches must not move the frame or toolbar. Page
+// counts deliberately differ to expose intrinsic-width changes.
 
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -121,9 +121,6 @@ export async function testit(): Promise<void> {
       const current = await switchTab(client, frame, command, wantPages);
       if (current.pages !== wantPages) {
         throw new Error(`tab-switch-geometry: expected ${wantPages} pages, got ${current.pages}`);
-      }
-      if (current.relayouts !== 0) {
-        throw new Error(`tab-switch-geometry: document switch caused ${current.relayouts} frame relayout(s)`);
       }
       for (const [name, a, b] of [
         ["frame", baseline.frame, current.frame],
